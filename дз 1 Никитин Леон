@@ -1,0 +1,118 @@
+# Импорт необходимых библиотек
+import pandas as pd
+import numpy as np
+
+# Функция для загрузки данных и первичного анализа
+def load_and_inspect_data():
+    """
+    Загружает и анализирует данные из файлов train.csv, lectures.csv, questions.csv.
+    Возвращает загруженные DataFrame для дальнейшего анализа.
+    """
+    # Загрузка данных
+    train = pd.read_csv('train0-011.csv')
+    lectures = pd.read_csv('lectures.csv')
+    questions = pd.read_csv('questions.csv')
+    
+    # Информация о наборах данных
+    print("Train dataset info:")
+    print(train.info(), "\n")
+    print("Lectures dataset info:")
+    print(lectures.info(), "\n")
+    print("Questions dataset info:")
+    print(questions.info(), "\n")
+    
+    return train, lectures, questions
+
+# Загрузка данных
+train_data, lectures_data, questions_data = load_and_inspect_data()
+
+# 1. Анализ пропусков
+def analyze_missing_values(df, name):
+    """
+    Анализирует пропуски в данных.
+    
+    Параметры:
+    df (pd.DataFrame): Набор данных для анализа.
+    name (str): Имя набора данных.
+    """
+    missing = df.isnull().sum()
+    print(f"Missing values in {name}:\n{missing}\n")
+
+analyze_missing_values(train_data, "train_data")
+analyze_missing_values(lectures_data, "lectures_data")
+analyze_missing_values(questions_data, "questions_data")
+
+# 2. Анализ корреляций в train_data
+def analyze_correlations(df, target):
+    """
+    Анализирует корреляцию числовых переменных с целевой переменной.
+    
+    Параметры:
+    df (pd.DataFrame): Набор данных для анализа.
+    target (str): Название целевой переменной.
+    """
+    correlations = df.corr(numeric_only=True)[target].sort_values(ascending=False)
+    print(f"Correlations with {target}:\n{correlations}\n")
+
+analyze_correlations(train_data, "answered_correctly")
+
+# 3. Анализ влияния лекций и объяснений на успех
+def analyze_effects(train):
+    """
+    Анализирует влияние лекций и объяснений на успешность ответов.
+    
+    Параметры:
+    train (pd.DataFrame): Набор данных train.
+    """
+    # Влияние типа контента
+    lecture_vs_questions = train.groupby("content_type_id")["answered_correctly"].mean()
+    print(f"Effect of content_type_id on answered_correctly:\n{lecture_vs_questions}\n")
+    
+    # Влияние объяснений
+    explanation_effect = train.groupby("prior_question_had_explanation")["answered_correctly"].mean()
+    print(f"Effect of prior_question_had_explanation on answered_correctly:\n{explanation_effect}\n")
+
+analyze_effects(train_data)
+
+# 4. Анализ времени ответа на вопросы
+def analyze_time_effect(train):
+    """
+    Анализирует влияние времени на успешность ответов.
+    
+    Параметры:
+    train (pd.DataFrame): Набор данных train.
+    """
+    elapsed_time = train[train["prior_question_elapsed_time"].notnull()]
+    elapsed_time_bins = pd.cut(elapsed_time["prior_question_elapsed_time"], bins=10)
+    time_effect = elapsed_time.groupby(elapsed_time_bins)["answered_correctly"].mean()
+    print(f"Effect of prior_question_elapsed_time on answered_correctly:\n{time_effect}\n")
+
+analyze_time_effect(train_data)
+
+# 5. Интеграция вопросов и лекций
+def integrate_data(train, questions, lectures):
+    """
+    Объединяет данные train с метаданными о вопросах и лекциях.
+    
+    Параметры:
+    train (pd.DataFrame): Основной набор данных.
+    questions (pd.DataFrame): Данные о вопросах.
+    lectures (pd.DataFrame): Данные о лекциях.
+    
+    Возвращает:
+    pd.DataFrame: Объединенный набор данных.
+    """
+    # Объединение с вопросами
+    questions = questions.rename(columns={"question_id": "content_id"})
+    train_questions = train[train["content_type_id"] == 0].merge(questions, on="content_id", how="left")
+    
+    # Объединение с лекциями
+    lectures = lectures.rename(columns={"lecture_id": "content_id"})
+    train_lectures = train[train["content_type_id"] == 1].merge(lectures, on="content_id", how="left")
+    
+    # Конкатенация
+    combined_data = pd.concat([train_questions, train_lectures], ignore_index=True)
+    print(f"Integrated data shape: {combined_data.shape}\n")
+    return combined_data
+
+combined_data = integrate_data(train_data, questions_data, lectures_data)
